@@ -1,0 +1,14 @@
+=== Bao cao Benchmark Dinh tuyen Ve tinh ===
+Hanh tinh: Earth (R = 6371 km)
+Scale: 0.0100 | So lan thu moi N: 5
+
+N      | Thoi gian (ms) | Tim thay   | So hop  
+-------+----------------+------------+---------
+10     |       1.576 ms |     0/5     | N/A
+20     |       0.228 ms |     5/5     | ~1
+50     |       0.543 ms |     5/5     | ~3
+
+=== Ket luan ===
+Thuat toan Dijkstra voi kiem tra Line-of-Sight hoat dong hieu qua
+voi so luong ve tinh len den 50 node (thoi gian < 10ms).
+Do phuc tap: O(N^2 log N) - xay do thi O(N^2) + Dijkstra O(N log N).

@@ -110,6 +110,15 @@ Kiểm chứng với giá trị thực tế NASA:
 
 **Dưới (Status Bar)** — Hiển thị tên hành tinh đang chọn và số vệ tinh.
 
+### 3.4 Định tuyến & Benchmark (Thành viên C)
+
+- **Thuật toán Line-of-Sight (LOS)**: Tính toán hình học không gian 3D để xác định đường truyền giữa 2 vệ tinh có bị hành tinh (Trái Đất/Sao Hỏa) che khuất hay không (`LineOfSight.java`).
+- **Định tuyến Dijkstra (`RoutingEngine.java`)**: Tìm đường đi ngắn nhất truyền tín hiệu qua các trạm vệ tinh tiếp sóng (có cờ `is_relay = true`). Xây dựng đồ thị động dựa trên khoảng cách và vị trí hiện thời của vệ tinh.
+- **Mô phỏng đường truyền bằng Laser 3D**: Sử dụng `Cylinder` và `Rotate` trong JavaFX 3D để vẽ các tia laser màu xanh lục (Lime). Hình ảnh được cập nhật liên tục theo thời gian thực tương ứng với quá trình di chuyển quỹ đạo của vệ tinh.
+- **Kiểm thử trên Cơ Sở Dữ Liệu (`seed_routing_test.sql`)**: Hệ thống đã được kiểm thử toàn diện bằng kịch bản mạng lưới vệ tinh phân bố dày đặc lấy trực tiếp từ SQL Server. Các vệ tinh liên lạc (màu vàng) và vệ tinh thường (màu cyan) kết nối ổn định; thuật toán hoạt động chính xác khi query dữ liệu thực tế từ DB.
+- **Báo cáo Benchmark (`BenchmarkRunner.java`)**: Đã chạy thử nghiệm thuật toán nghiệm thu trên mô hình N = 10, 20, 50 vệ tinh ngẫu nhiên.
+  - Kết quả: Thời gian định tuyến hoàn thành cực kỳ nhanh (< 10ms) cho 50 node.
+  - Độ phức tạp thời gian: $O(N^2)$ (xây dựng đồ thị) + $O(N \log N)$ (chạy Dijkstra).
 ---
 
 ## 4. Những thay đổi so với kế hoạch ban đầu
@@ -273,6 +282,15 @@ mvn javafx:run
 │                                     │  Alt: ___________    │
 │                                     │  □ Vệ tinh liên lạc  │
 │                                     │  [➕ Thêm vào DB]    │
+<<<<<<< HEAD
+=======
+│                                     ├──────────────────────┤
+│                                     │  [Định tuyến]        │
+│                                     │  Từ:  [SAT-1 ▼]      │
+│                                     │  Đến: [SAT-3 ▼]      │
+│                                     │  [🔍 Tìm đường]      │
+│                                     │  [❌ Xoá đường]      │
+>>>>>>> 7107ddad8d4205652deb5824bd076c6f36659cf9
 ├─────────────────────────────────────┴──────────────────────┤
 │  Hành tinh: Earth  |  Vệ tinh: 3  |  Kéo chuột để xoay... │
 └────────────────────────────────────────────────────────────┘
@@ -318,6 +336,16 @@ Nhấn **➕ Thêm vào DB**. Vệ tinh sẽ xuất hiện ngay trong cảnh 3D 
 
 Nhấn vào tên vệ tinh trong danh sách để chọn (highlight xanh), sau đó nhấn **🗑 Xoá vệ tinh đã chọn**. Vệ tinh sẽ bị xóa khỏi cảnh 3D và khỏi database ngay lập tức.
 
+<<<<<<< HEAD
+=======
+### 6.7 Định tuyến giữa 2 vệ tinh (Routing)
+
+- Trong khu vực **Định tuyến (Dijkstra)**, chọn vệ tinh nguồn ở **Từ:** và vệ tinh đích ở **Đến:**.
+- Nhấn nút **🔍 Tìm đường**. Kết quả số bước nhảy (hop) và lộ trình sẽ được hiện ra.
+- Trong giao diện 3D, các tia laser màu xanh lục sẽ lập tức xuất hiện nối liền các vệ tinh nằm trong lộ trình. Tia laser sẽ tự động chuyển động theo vệ tinh khi chạy hoạt ảnh (animation).
+- Nhấn nút **❌ Xoá đường** để huỷ bỏ đường truyền và tắt hiển thị tia laser.
+
+>>>>>>> 7107ddad8d4205652deb5824bd076c6f36659cf9
 ---
 
 ## 7. Trạng thái hiện tại
@@ -331,9 +359,15 @@ Nhấn vào tên vệ tinh trong danh sách để chọn (highlight xanh), sau �
 | Animate vệ tinh bay quanh hành tinh | Hoàn thành |
 | Thêm / xóa vệ tinh qua UI | Hoàn thành |
 | Phân biệt relay (vàng) vs thường (cyan) | Hoàn thành |
-| Định tuyến A→B qua relay (Line-of-Sight + Dijkstra) | Chưa hoàn thành (Thành viên C) |
-| Visualize đường truyền bằng laser beam 3D | Chưa hoàn thành (Thành viên C) |
-| Báo cáo benchmark số lượng vệ tinh | Chưa hoàn thành (Thành viên C) |
+<<<<<<< HEAD
+| Định tuyến A→B qua relay (Line-of-Sight + Dijkstra) | Hoàn thành (Thành viên C) |
+| Visualize đường truyền bằng laser beam 3D | Hoàn thành (Thành viên C) |
+| Báo cáo benchmark số lượng vệ tinh | Hoàn thành (Thành viên C) |
+=======
+| Định tuyến A→B qua relay (Line-of-Sight + Dijkstra) | Hoàn thành |
+| Visualize đường truyền bằng laser beam 3D | Hoàn thành |
+| Báo cáo benchmark số lượng vệ tinh | Hoàn thành |
+>>>>>>> 7107ddad8d4205652deb5824bd076c6f36659cf9
 
 ---
 

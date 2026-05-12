@@ -6,6 +6,9 @@ import com.satellite.dao.SatelliteDAO;
 import com.satellite.model.Planet;
 import com.satellite.model.Satellite;
 import com.satellite.physics.OrbitalSatellite;
+import com.satellite.routing.LineOfSight;
+import com.satellite.routing.RoutingEngine;
+import com.satellite.routing.RoutingEngine.RoutingResult;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -36,19 +39,24 @@ import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
+import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Sphere;
 import javafx.scene.transform.Rotate;
+import javafx.geometry.Point3D;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +75,7 @@ public class Main extends Application {
     private Planet currentPlanet;
     private final Group worldGroup = new Group();
     private final Group satellitesGroup = new Group();
+    private final Group laserGroup = new Group();
     private Sphere planetSphere;
     private PerspectiveCamera camera;
 
@@ -83,7 +92,13 @@ public class Main extends Application {
     private long lastNanos = 0;
 
     private ComboBox<Planet> planetCombo;
+    private ComboBox<Satellite> fromCombo, toCombo;
     private Label statusLabel;
+    private Label routeResultLabel;
+    private RoutingResult currentRoute = null;
+    private int routeSrcId = -1;
+    private int routeDstId = -1;
+    private boolean wasRouteIntact = true;
 
     @Override
     public void start(Stage stage) {
@@ -110,15 +125,16 @@ public class Main extends Application {
             if (animator != null) animator.stop();
             DatabaseConnection.close();
         });
+        stage.setMaximized(true);
         stage.show();
 
         loadPlanetsIntoUI();
         startAnimation();
     }
 
-    private SubScene build3DScene() {
+    private StackPane build3DScene() {
         worldGroup.getTransforms().addAll(rotateX, rotateY);
-        worldGroup.getChildren().add(satellitesGroup);
+        worldGroup.getChildren().addAll(satellitesGroup, laserGroup);
 
         camera = new PerspectiveCamera(true);
         camera.setNearClip(1);
@@ -140,10 +156,15 @@ public class Main extends Application {
         sub.setOnMousePressed(this::onMousePressed);
         sub.setOnMouseDragged(this::onMouseDragged);
         sub.setOnScroll(this::onScroll);
-        return sub;
+
+        StackPane container = new StackPane(sub);
+        container.setStyle("-fx-background-color: #02030a;");
+        sub.widthProperty().bind(container.widthProperty());
+        sub.heightProperty().bind(container.heightProperty());
+        return container;
     }
 
-    private VBox buildControlPanel() {
+    private ScrollPane buildControlPanel() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(12));
         panel.setPrefWidth(360);
@@ -180,21 +201,38 @@ public class Main extends Application {
         });
 
         Label listLbl = section("Danh sách vệ tinh");
+        Label listCountLbl = new Label("Chưa tải");
+        listCountLbl.setStyle("-fx-text-fill: #aab; -fx-font-size: 11px;");
+
         ListView<Satellite> listView = new ListView<>(listData);
         listView.setPrefHeight(180);
         listView.setCellFactory(lv -> new ListCell<>() {
             @Override protected void updateItem(Satellite s, boolean empty) {
                 super.updateItem(s, empty);
-                if (empty || s == null) { setText(null); return; }
+                if (empty || s == null) { setText(null); setStyle(""); return; }
                 setText(String.format("%s%s  (alt %.0f km)",
                     s.isRelay() ? "📡 " : "🛰 ", s.getName(), s.getAltitudeKm()));
+                setStyle("-fx-text-fill: black;");
             }
         });
+        listData.addListener((javafx.collections.ListChangeListener<Satellite>) c -> {
+            int n = listData.size();
+            if (n == 0)
+                listCountLbl.setText("⚠ Không có vệ tinh — chạy sql/seed_satellites.sql");
+            else
+                listCountLbl.setText(n + " vệ tinh");
+        });
+
         Button delBtn = new Button("🗑 Xoá vệ tinh đã chọn");
         delBtn.setMaxWidth(Double.MAX_VALUE);
         delBtn.setOnAction(e -> {
             Satellite sel = listView.getSelectionModel().getSelectedItem();
             if (sel != null) deleteSatellite(sel);
+        });
+        Button refreshBtn = new Button("↺ Làm mới danh sách");
+        refreshBtn.setMaxWidth(Double.MAX_VALUE);
+        refreshBtn.setOnAction(e -> {
+            if (currentPlanet != null) setCurrentPlanet(currentPlanet);
         });
 
         Label addLbl = section("Thêm vệ tinh mới");
@@ -223,25 +261,99 @@ public class Main extends Application {
                     Double.parseDouble(lonF.getText().trim()),
                     Double.parseDouble(altF.getText().trim()),
                     relayCb.isSelected());
-                satelliteDAO.insert(s);
-                refreshAddedSatellites();
+                try {
+                    satelliteDAO.insert(s);
+                    refreshAddedSatellites();
+                } catch (RuntimeException ex) {
+                    warn("Lỗi thêm vệ tinh:\n" + ex.getMessage());
+                    return;
+                }
                 nameF.clear(); latF.clear(); lonF.clear(); altF.clear(); relayCb.setSelected(false);
             } catch (NumberFormatException ex) {
                 warn("Lat / Lon / Alt phải là số.");
             }
         });
 
+        // === Auto-generate section ===
+        Label autoLbl = section("Sinh vệ tinh tự động");
+        TextField autoNField = new TextField("20");
+        autoNField.setPromptText("Số vệ tinh N");
+        CheckBox autoRelayCb = new CheckBox("Là relay (tham gia định tuyến)");
+        autoRelayCb.setSelected(true);
+        autoRelayCb.setStyle("-fx-text-fill: #ddd;");
+        Label autoHintLbl = new Label("Phân bố đều toàn hành tinh (Fibonacci sphere), độ cao 300–800 km ngẫu nhiên");
+        autoHintLbl.setStyle("-fx-text-fill: #aab; -fx-font-size: 11px;");
+        autoHintLbl.setWrapText(true);
+
+        HBox autoRow = new HBox(8, lbl("Số N:"), autoNField);
+        autoRow.setAlignment(Pos.CENTER_LEFT);
+
+        Button autoGenBtn = new Button("⚡ Sinh N vệ tinh (xoá AUTO cũ)");
+        autoGenBtn.setMaxWidth(Double.MAX_VALUE);
+        autoGenBtn.setOnAction(e -> {
+            try {
+                int n = Integer.parseInt(autoNField.getText().trim());
+                if (n < 2 || n > 500) { warn("N phải trong khoảng 2 – 500"); return; }
+                autoGenSatellites(n, autoRelayCb.isSelected());
+            } catch (NumberFormatException ex) {
+                warn("N phải là số nguyên hợp lệ.");
+            }
+        });
+
+        // === Routing section (Thành viên C) ===
+        Label routeLbl = section("Định tuyến (Dijkstra)");
+
+        fromCombo = new ComboBox<>(listData);
+        fromCombo.setMaxWidth(Double.MAX_VALUE);
+        fromCombo.setPromptText("Từ vệ tinh...");
+        fromCombo.setConverter(satConverter());
+
+        toCombo = new ComboBox<>(listData);
+        toCombo.setMaxWidth(Double.MAX_VALUE);
+        toCombo.setPromptText("Đến vệ tinh...");
+        toCombo.setConverter(satConverter());
+
+        Button routeBtn = new Button("\uD83D\uDD0D Tìm đường");
+        routeBtn.setMaxWidth(Double.MAX_VALUE);
+        routeBtn.setOnAction(e -> findRoute());
+
+        Button clearRouteBtn = new Button("\u274C Xoá đường");
+        clearRouteBtn.setMaxWidth(Double.MAX_VALUE);
+        clearRouteBtn.setOnAction(e -> {
+            currentRoute = null;
+            laserGroup.getChildren().clear();
+            routeResultLabel.setText("");
+        });
+
+        routeResultLabel = new Label("");
+        routeResultLabel.setWrapText(true);
+        routeResultLabel.setStyle("-fx-text-fill: #8fa;");
+
         panel.getChildren().addAll(
             planetLbl, planetCombo,
             new Separator(),
             animLbl, playBtn, scaleLbl, scaleSlider,
             new Separator(),
-            listLbl, listView, delBtn,
+            listLbl, listCountLbl, listView, delBtn, refreshBtn,
             new Separator(),
-            addLbl, form, relayCb, addBtn
+            addLbl, form, relayCb, addBtn,
+            new Separator(),
+            autoLbl, autoRow, autoRelayCb, autoHintLbl, autoGenBtn,
+            new Separator(),
+            routeLbl,
+            lbl("Từ:"), fromCombo,
+            lbl("Đến:"), toCombo,
+            routeBtn, clearRouteBtn, routeResultLabel
         );
         VBox.setVgrow(listView, Priority.SOMETIMES);
-        return panel;
+
+        ScrollPane scroll = new ScrollPane(panel);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPrefWidth(380);
+        scroll.setStyle("-fx-background: #1f2230; -fx-background-color: #1f2230;");
+        return scroll;
     }
 
     private HBox buildStatusBar() {
@@ -267,6 +379,8 @@ public class Main extends Application {
         this.currentPlanet = planet;
         if (planetSphere != null) worldGroup.getChildren().remove(planetSphere);
         satellitesGroup.getChildren().clear();
+        laserGroup.getChildren().clear();
+        currentRoute = null;
         nodes.clear();
         listData.clear();
 
@@ -275,8 +389,14 @@ public class Main extends Application {
         planetSphere.setMaterial(buildPlanetMaterial(planet));
         worldGroup.getChildren().add(0, planetSphere);
 
-        List<Satellite> sats = satelliteDAO.findByPlanet(planet.getId());
-        for (Satellite s : sats) addSatelliteNode(s);
+        try {
+            List<Satellite> sats = satelliteDAO.findByPlanet(planet.getId());
+            for (Satellite s : sats) addSatelliteNode(s);
+        } catch (RuntimeException ex) {
+            new Alert(AlertType.ERROR,
+                "Lỗi tải vệ tinh từ DB:\n" + ex.getMessage()
+                + "\n\nHãy chạy sql/seed_satellites.sql trong SSMS.").showAndWait();
+        }
 
         camera.setTranslateZ(-Math.max(800, radiusScene * 10));
         updateStatus();
@@ -317,7 +437,12 @@ public class Main extends Application {
     }
 
     private void deleteSatellite(Satellite s) {
-        satelliteDAO.delete(s.getId());
+        try {
+            satelliteDAO.delete(s.getId());
+        } catch (RuntimeException ex) {
+            warn("Lỗi xoá vệ tinh:\n" + ex.getMessage());
+            return;
+        }
         SatNode sn = nodes.remove(s.getId());
         if (sn != null) {
             satellitesGroup.getChildren().remove(sn.sphere);
@@ -339,6 +464,7 @@ public class Main extends Application {
                 lastNanos = now;
                 if (!playing) return;
                 for (SatNode sn : nodes.values()) sn.update(dt, timeScale);
+                if (currentRoute != null && currentRoute.found()) updateLasers();
             }
         };
         animator.start();
@@ -375,6 +501,162 @@ public class Main extends Application {
 
     private void warn(String msg) {
         new Alert(AlertType.WARNING, msg).showAndWait();
+    }
+
+    // ==================== Routing (Thành viên C) ====================
+
+    private StringConverter<Satellite> satConverter() {
+        return new StringConverter<>() {
+            public String toString(Satellite s) {
+                return s == null ? "" : (s.isRelay() ? "\uD83D\uDCE1 " : "\uD83D\uDEF0 ") + s.getName();
+            }
+            public Satellite fromString(String str) { return null; }
+        };
+    }
+
+    private void findRoute() {
+        Satellite from = fromCombo.getValue();
+        Satellite to   = toCombo.getValue();
+        if (from == null || to == null) { warn("Chọn vệ tinh nguồn và đích"); return; }
+        if (from.getId() == to.getId()) { warn("Nguồn và đích phải khác nhau"); return; }
+
+        routeSrcId = from.getId();
+        routeDstId = to.getId();
+        wasRouteIntact = true;
+
+        double R = currentPlanet.getRadiusKm() * SCALE;
+        currentRoute = RoutingEngine.findRoute(new ArrayList<>(listData), routeSrcId, routeDstId, R);
+        routeResultLabel.setStyle("-fx-text-fill: #8fa;");
+        routeResultLabel.setText(currentRoute.summary());
+        updateLasers();
+    }
+
+    private void updateLasers() {
+        laserGroup.getChildren().clear();
+        if (currentRoute == null || !currentRoute.found()) return;
+        double R = currentPlanet.getRadiusKm() * SCALE;
+        List<Satellite> path = currentRoute.path();
+        boolean routeIntact = true;
+        for (int i = 0; i < path.size() - 1; i++) {
+            Satellite a = findLiveSatellite(path.get(i).getId());
+            Satellite b = findLiveSatellite(path.get(i + 1).getId());
+            if (a != null && b != null) {
+                if (!LineOfSight.hasLOS(a, b, R)) routeIntact = false;
+            }
+        }
+        if (!routeIntact && wasRouteIntact) {
+            wasRouteIntact = false;
+            tryReroute(R);
+            return;
+        }
+        wasRouteIntact = routeIntact;
+        for (int i = 0; i < path.size() - 1; i++) {
+            Satellite a = findLiveSatellite(path.get(i).getId());
+            Satellite b = findLiveSatellite(path.get(i + 1).getId());
+            if (a != null && b != null)
+                laserGroup.getChildren().add(makeLaser(a, b, true));
+        }
+    }
+
+    private void tryReroute(double planetR) {
+        if (routeSrcId < 0 || routeDstId < 0) return;
+        RoutingResult newRoute = RoutingEngine.findRoute(
+            new ArrayList<>(listData), routeSrcId, routeDstId, planetR);
+        if (newRoute.found()) {
+            currentRoute = newRoute;
+            wasRouteIntact = true;
+            routeResultLabel.setStyle("-fx-text-fill: #8fa;");
+            routeResultLabel.setText("↺ Tự động định tuyến lại: " + newRoute.summary());
+        } else {
+            currentRoute = null;
+            laserGroup.getChildren().clear();
+            routeResultLabel.setStyle("-fx-text-fill: #f88;");
+            routeResultLabel.setText("✗ Không tìm thấy đường — tất cả tuyến bị che khuất.");
+        }
+    }
+
+    private void autoGenSatellites(int n, boolean isRelay) {
+        if (currentPlanet == null) return;
+        try {
+            int removed = satelliteDAO.deleteAutoGenerated(currentPlanet.getId());
+            if (removed > 0) {
+                nodes.entrySet().removeIf(entry -> {
+                    Satellite s = entry.getValue().orbital.getSatellite();
+                    if (s.getName().startsWith("AUTO-")) {
+                        satellitesGroup.getChildren().remove(entry.getValue().sphere);
+                        listData.remove(s);
+                        return true;
+                    }
+                    return false;
+                });
+            }
+        } catch (RuntimeException ex) {
+            warn("Lỗi xoá AUTO cũ: " + ex.getMessage());
+            return;
+        }
+
+        // Fibonacci sphere — phân bố đều N điểm trên mặt cầu
+        double golden = (1 + Math.sqrt(5)) / 2.0;
+        java.util.Random rng = new java.util.Random();
+        double altMin = 300, altMax = 800;
+
+        for (int i = 0; i < n; i++) {
+            // lat: từ -90° đến +90° phân bố đều theo sin
+            double lat = Math.toDegrees(Math.asin(1.0 - 2.0 * (i + 0.5) / n));
+            // lon: xoay theo tỉ lệ vàng để tránh xếp hàng
+            double lon = (360.0 * i / golden) % 360.0;
+            if (lon > 180) lon -= 360.0;
+            double alt = altMin + rng.nextDouble() * (altMax - altMin);
+
+            Satellite s = new Satellite(0, currentPlanet.getId(),
+                "AUTO-" + (i + 1), lat, lon, alt, isRelay);
+            try {
+                satelliteDAO.insert(s);
+            } catch (RuntimeException ex) {
+                warn("Lỗi thêm AUTO-" + (i + 1) + ": " + ex.getMessage());
+                break;
+            }
+        }
+        refreshAddedSatellites();
+        currentRoute = null;
+        laserGroup.getChildren().clear();
+        routeResultLabel.setText("");
+    }
+
+    private Satellite findLiveSatellite(int id) {
+        SatNode sn = nodes.get(id);
+        return sn != null ? sn.orbital.getSatellite() : null;
+    }
+
+    private Cylinder makeLaser(Satellite a, Satellite b, boolean losOk) {
+        // JavaFX Y-axis flip: dùng -getY()
+        double ax = a.getX(), ay = -a.getY(), az = a.getZ();
+        double bx = b.getX(), by = -b.getY(), bz = b.getZ();
+
+        double dx = bx - ax, dy = by - ay, dz = bz - az;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        Cylinder cyl = new Cylinder(0.4, dist);
+        PhongMaterial mat = new PhongMaterial();
+        mat.setDiffuseColor(losOk ? Color.LIME : Color.RED);
+        cyl.setMaterial(mat);
+
+        // Đặt giữa 2 điểm
+        cyl.setTranslateX((ax + bx) / 2);
+        cyl.setTranslateY((ay + by) / 2);
+        cyl.setTranslateZ((az + bz) / 2);
+
+        // Xoay cylinder (mặc định dọc Y) để nối 2 điểm
+        Point3D yAxis = new Point3D(0, 1, 0);
+        Point3D direction = new Point3D(dx, dy, dz).normalize();
+        Point3D axis = yAxis.crossProduct(direction);
+        double angle = Math.toDegrees(Math.acos(
+            Math.max(-1, Math.min(1, yAxis.dotProduct(direction)))));
+
+        if (axis.magnitude() > 1e-10) {
+            cyl.getTransforms().add(new Rotate(angle, axis));
+        }
+        return cyl;
     }
 
     private static class SatNode {
