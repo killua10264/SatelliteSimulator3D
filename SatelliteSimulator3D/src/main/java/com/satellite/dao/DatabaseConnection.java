@@ -9,7 +9,7 @@ public class DatabaseConnection {
         "jdbc:sqlserver://localhost:1433;databaseName=satellite_db;encrypt=false;";
 
     private static final String USER = "satellite_user";
-    private static final String PASS = "Satellite@2024";
+    private static final String PASS = "Satellite@2026";
 
     private static Connection connection;
 
