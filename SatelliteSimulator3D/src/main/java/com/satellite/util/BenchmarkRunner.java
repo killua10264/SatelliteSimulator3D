@@ -8,13 +8,17 @@ import com.satellite.routing.RoutingEngine.RoutingResult;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 /**
- * Benchmark hiệu năng thuật toán Dijkstra với số lượng vệ tinh khác nhau.
- * Chạy độc lập: mvn compile exec:java -Dexec.mainClass="com.satellite.util.BenchmarkRunner"
+ * Đo hiệu năng thuật toán Dijkstra + Line-of-Sight với số lượng vệ tinh khác nhau.
+ *
+ * Chạy:
+ *   cd SatelliteSimulator3D
+ *   mvn compile exec:java -Dexec.mainClass="com.satellite.util.BenchmarkRunner"
+ *
+ * Kết quả in ra console và ghi vào benchmark_report.txt để đối chiếu với báo cáo.
  */
 public class BenchmarkRunner {
 
@@ -41,7 +45,6 @@ public class BenchmarkRunner {
 
             for (int t = 0; t < trials; t++) {
                 List<Satellite> sats = generateRandomRelaySats(n, earth);
-                // Tính tọa độ 3D cho mỗi vệ tinh
                 for (Satellite s : sats) {
                     CoordConverter.applyToSatellite(s, earth.getRadiusKm(), SCALE);
                 }
@@ -66,11 +69,10 @@ public class BenchmarkRunner {
         report.append("\n=== Ket luan ===\n");
         report.append("Thuat toan Dijkstra voi kiem tra Line-of-Sight hoat dong hieu qua\n");
         report.append("voi so luong ve tinh len den 50 node (thoi gian < 10ms).\n");
-        report.append("Do phuc tap: O(N^2 log N) - xay do thi O(N^2) + Dijkstra O(N log N).\n");
+        report.append("Do phuc tap: O(N^2) xay do thi + O(N log N) Dijkstra.\n");
 
         System.out.println(report);
 
-        // Ghi file báo cáo
         try (FileWriter fw = new FileWriter("benchmark_report.txt")) {
             fw.write(report.toString());
         }
@@ -78,15 +80,15 @@ public class BenchmarkRunner {
     }
 
     /**
-     * Sinh N vệ tinh relay ngẫu nhiên quanh hành tinh.
+     * Sinh N vệ tinh relay ngẫu nhiên với seed cố định — đảm bảo tái lập kết quả.
      */
     private static List<Satellite> generateRandomRelaySats(int n, Planet p) {
-        Random rng = new Random(42); // seed cố định để tái lập
+        Random rng = new Random(42);
         List<Satellite> list = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            double lat = rng.nextDouble() * 180 - 90;     // -90 đến 90
-            double lon = rng.nextDouble() * 360 - 180;    // -180 đến 180
-            double alt = 300 + rng.nextDouble() * 1200;   // 300 - 1500 km (LEO)
+            double lat = rng.nextDouble() * 180 - 90;
+            double lon = rng.nextDouble() * 360 - 180;
+            double alt = 300 + rng.nextDouble() * 1200;
             list.add(new Satellite(i + 1, p.getId(),
                 "SAT-" + (i + 1), lat, lon, alt, true));
         }

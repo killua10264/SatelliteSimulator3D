@@ -281,7 +281,7 @@ public class Main extends Application {
         CheckBox autoRelayCb = new CheckBox("Là relay (tham gia định tuyến)");
         autoRelayCb.setSelected(true);
         autoRelayCb.setStyle("-fx-text-fill: #ddd;");
-        Label autoHintLbl = new Label("Phân bố đều toàn hành tinh (Fibonacci sphere), độ cao 300–800 km ngẫu nhiên");
+        Label autoHintLbl = new Label("Fibonacci sphere ±55°, độ cao 800–2000 km ngẫu nhiên. Gợi ý: N ≥ 14 để phủ sóng ổn định.");
         autoHintLbl.setStyle("-fx-text-fill: #aab; -fx-font-size: 11px;");
         autoHintLbl.setWrapText(true);
 
@@ -526,8 +526,13 @@ public class Main extends Application {
 
         double R = currentPlanet.getRadiusKm() * SCALE;
         currentRoute = RoutingEngine.findRoute(new ArrayList<>(listData), routeSrcId, routeDstId, R);
-        routeResultLabel.setStyle("-fx-text-fill: #8fa;");
-        routeResultLabel.setText(currentRoute.summary());
+        if (currentRoute.found()) {
+            routeResultLabel.setStyle("-fx-text-fill: #8fa;");
+            routeResultLabel.setText(currentRoute.summary());
+        } else {
+            routeResultLabel.setStyle("-fx-text-fill: #f88;");
+            routeResultLabel.setText("✗ " + routeDiagnostics(routeSrcId, routeDstId, R));
+        }
         updateLasers();
     }
 
@@ -571,8 +576,31 @@ public class Main extends Application {
             currentRoute = null;
             laserGroup.getChildren().clear();
             routeResultLabel.setStyle("-fx-text-fill: #f88;");
-            routeResultLabel.setText("✗ Không tìm thấy đường — tất cả tuyến bị che khuất.");
+            routeResultLabel.setText("✗ " + routeDiagnostics(routeSrcId, routeDstId, planetR));
         }
+    }
+
+    private String routeDiagnostics(int srcId, int dstId, double R) {
+        Satellite src = findLiveSatellite(srcId);
+        Satellite dst = findLiveSatellite(dstId);
+        if (src == null || dst == null) return "Không tìm thấy vệ tinh nguồn/đích.";
+
+        int relayCount = 0, srcVisible = 0, dstVisible = 0;
+        for (Satellite s : listData) {
+            if (!s.isRelay() || s.getId() == srcId || s.getId() == dstId) continue;
+            relayCount++;
+            if (LineOfSight.hasLOS(src, s, R)) srcVisible++;
+            if (LineOfSight.hasLOS(dst, s, R)) dstVisible++;
+        }
+        if (relayCount == 0)
+            return "Không có vệ tinh relay. Thêm relay hoặc tích 'Là relay' khi sinh tự động.";
+        if (srcVisible == 0)
+            return String.format("Vệ tinh nguồn không thấy relay nào (%d relay tổng). Chờ quỹ đạo hoặc tăng N.", relayCount);
+        if (dstVisible == 0)
+            return String.format("Vệ tinh đích không thấy relay nào (%d relay tổng). Chờ quỹ đạo hoặc tăng N.", relayCount);
+        return String.format(
+            "Mạng relay bị phân mảnh: nguồn thấy %d relay, đích thấy %d relay nhưng 2 nhóm không nối được. Tăng N hoặc dùng độ cao cao hơn.",
+            srcVisible, dstVisible);
     }
 
     private void autoGenSatellites(int n, boolean isRelay) {
@@ -595,14 +623,17 @@ public class Main extends Application {
             return;
         }
 
-        // Fibonacci sphere — phân bố đều N điểm trên mặt cầu
+        // Fibonacci sphere giới hạn lat trong [-55°, +55°]
+        // Ở độ cao 800-2000km góc LOS = 54-81°, khoảng cách Fibonacci ~45° → đảm bảo kết nối
         double golden = (1 + Math.sqrt(5)) / 2.0;
         java.util.Random rng = new java.util.Random();
-        double altMin = 300, altMax = 800;
+        double altMin = 800, altMax = 2000;
+        double sinLimit = Math.sin(Math.toRadians(55)); // 0.819
 
         for (int i = 0; i < n; i++) {
-            // lat: từ -90° đến +90° phân bố đều theo sin
-            double lat = Math.toDegrees(Math.asin(1.0 - 2.0 * (i + 0.5) / n));
+            // Map [-1,1] → [-sinLimit, sinLimit] để giới hạn lat trong [-55°, 55°]
+            double sinLat = sinLimit * (1.0 - 2.0 * (i + 0.5) / n);
+            double lat = Math.toDegrees(Math.asin(sinLat));
             // lon: xoay theo tỉ lệ vàng để tránh xếp hàng
             double lon = (360.0 * i / golden) % 360.0;
             if (lon > 180) lon -= 360.0;
