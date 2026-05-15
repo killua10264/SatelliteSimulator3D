@@ -6,12 +6,10 @@ import java.sql.SQLException;
 
 public class DatabaseConnection {
     private static final String URL =
-        "jdbc:sqlserver://localhost;databaseName=satellite_db;"
-        + "integratedSecurity=true;encrypt=false;";
+        "jdbc:sqlserver://localhost:1433;databaseName=satellite_db;encrypt=false;";
 
-    // Để trống nếu dùng Windows Authentication
-    private static final String USER = "";
-    private static final String PASS = "";
+    private static final String USER = "satellite_user";
+    private static final String PASS = "Satellite@2024";
 
     private static Connection connection;
 
