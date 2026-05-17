@@ -63,20 +63,34 @@ Restart-Service MSSQLSERVER
 
 ### Bước 6. Chuẩn bị Database
 
-Mở **SSMS**, kết nối `localhost`, chạy lần lượt 2 file sau:
+Mở **SSMS**, kết nối `localhost` bằng tài khoản **sa** (hoặc Windows Auth), mở **New Query** và chạy lệnh sau để tạo database + login:
+
+```sql
+CREATE DATABASE satellite_db;
+GO
+
+CREATE LOGIN satellite_user WITH PASSWORD = 'Satellite@2024';
+USE satellite_db;
+CREATE USER satellite_user FOR LOGIN satellite_user;
+ALTER ROLE db_owner ADD MEMBER satellite_user;
+GO
+```
+
+> Nếu login đã tồn tại từ trước, chạy lệnh này để đồng bộ password với code:
+> ```sql
+> ALTER LOGIN satellite_user WITH PASSWORD = 'Satellite@2024';
+> ```
+
+Sau đó chạy lần lượt 2 file SQL trong thư mục `sql/`:
 
 | Thứ tự | File | Mục đích |
 |---|---|---|
-| 1 | `sql/create_tables.sql` | Tạo database, bảng, user (`satellite_user / Satellite@2024`) |
+| 1 | `sql/create_tables.sql` | Tạo bảng `planets`, `satellites` và dữ liệu hành tinh mẫu |
 | 2 | `sql/seed_satellites.sql` | Chèn dữ liệu vệ tinh mẫu (idempotent — an toàn chạy nhiều lần) |
 
-> File `sql/seed_routing_test.sql` là tùy chọn — chứa dữ liệu kiểm thử định tuyến dày đặc hơn.
+Trong SSMS: **File** → **Open** → chọn file → nhấn **Execute** (F5).
 
-Hoặc dùng `sqlcmd`:
-```powershell
-sqlcmd -S localhost -U satellite_user -P "Satellite@2024" -d satellite_db -i sql/create_tables.sql
-sqlcmd -S localhost -U satellite_user -P "Satellite@2024" -d satellite_db -i sql/seed_satellites.sql
-```
+> File `sql/seed_routing_test.sql` là tùy chọn — dữ liệu vệ tinh dày đặc hơn để kiểm thử định tuyến.
 
 ### Bước 7. Tải texture hành tinh
 

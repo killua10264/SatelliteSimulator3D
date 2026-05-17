@@ -4,10 +4,6 @@ import com.satellite.model.Satellite;
 
 import java.util.*;
 
-/**
- * Định tuyến truyền tin giữa các vệ tinh sử dụng thuật toán Dijkstra.
- * Chỉ cho phép truyền qua các vệ tinh relay có Line-of-Sight.
- */
 public class RoutingEngine {
 
     /**

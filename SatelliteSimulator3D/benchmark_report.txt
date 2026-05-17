@@ -1,14 +1,52 @@
 === Bao cao Benchmark Dinh tuyen Ve tinh ===
 Hanh tinh: Earth (R = 6371 km)
-Scale: 0.0100 | So lan thu moi N: 5
+Scale: 0,0100 (1 scene unit = 100 km) | So lan thu moi N: 5
 
-N      | Thoi gian (ms) | Tim thay   | So hop  
--------+----------------+------------+---------
-10     |       1.576 ms |     0/5     | N/A
-20     |       0.228 ms |     5/5     | ~1
-50     |       0.543 ms |     5/5     | ~3
+N      | Thoi gian (ms) | Tim thay   | So hop TB
+-------+----------------+------------+----------
+10     |       0,337 ms |     4/5     | ~1 hop
+20     |       0,253 ms |     5/5     | ~2 hop
+50     |       0,292 ms |     5/5     | ~2 hop
+
+=== Chi tiet dinh tuyen mau (1 lan chay) ===
+
+--- N = 10 ve tinh ---
+Nguon : SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+Dich  : SAT-10      lat= -14,8  lon=  170,7  alt=  1656 km
+Duong di (2 hop):
+  1. [SRC] SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+       ?? den SAT-4      : 72,25 units = 7225 km
+  2. [RLY] SAT-4       lat=  50,9  lon=  151,0  alt=  1324 km
+       ?? den SAT-10     : 87,91 units = 8791 km
+  3. [DST] SAT-10      lat= -14,8  lon=  170,7  alt=  1656 km
+  Tong khoang cach : 16017 km
+  Thoi gian tinh   : 1,531 ms
+
+--- N = 20 ve tinh ---
+Nguon : SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+Dich  : SAT-20      lat=  55,0  lon=   41,8  alt=  1249 km
+Duong di (1 hop):
+  1. [SRC] SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+       ?? den SAT-20     : 27,93 units = 2793 km
+  2. [DST] SAT-20      lat=  55,0  lon=   41,8  alt=  1249 km
+  Tong khoang cach : 2793 km
+  Thoi gian tinh   : 0,481 ms
+
+--- N = 50 ve tinh ---
+Nguon : SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+Dich  : SAT-50      lat=   7,7  lon= -125,0  alt=  1441 km
+Duong di (3 hop):
+  1. [SRC] SAT-1       lat=  41,0  lon=   66,0  alt=  1170 km
+       ?? den SAT-49     : 67,31 units = 6731 km
+  2. [RLY] SAT-49      lat=  87,3  lon= -133,5  alt=  1537 km
+       ?? den SAT-32     : 59,19 units = 5919 km
+  3. [RLY] SAT-32      lat=  44,1  lon= -118,5  alt=  1766 km
+       ?? den SAT-50     : 50,51 units = 5051 km
+  4. [DST] SAT-50      lat=   7,7  lon= -125,0  alt=  1441 km
+  Tong khoang cach : 17702 km
+  Thoi gian tinh   : 0,517 ms
 
 === Ket luan ===
 Thuat toan Dijkstra voi kiem tra Line-of-Sight hoat dong hieu qua
 voi so luong ve tinh len den 50 node (thoi gian < 10ms).
-Do phuc tap: O(N^2 log N) - xay do thi O(N^2) + Dijkstra O(N log N).
+Do phuc tap: O(N^2) xay do thi + O(N log N) Dijkstra.
