@@ -120,7 +120,7 @@ public class Main extends Application {
 
         Scene scene = new Scene(root, 1280, 780);
         stage.setScene(scene);
-        stage.setTitle("Satellite Simulator 3D — Phase 1+2");
+        stage.setTitle("Satellite Simulator 3D");
         stage.setOnCloseRequest(e -> {
             if (animator != null) animator.stop();
             DatabaseConnection.close();

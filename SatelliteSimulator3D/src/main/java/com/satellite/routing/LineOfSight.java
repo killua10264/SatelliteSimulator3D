@@ -2,10 +2,6 @@ package com.satellite.routing;
 
 import com.satellite.model.Satellite;
 
-/**
- * Kiểm tra Line-of-Sight giữa 2 vệ tinh.
- * Đường thẳng nối 2 vệ tinh có bị hành tinh (hình cầu tâm O, bán kính R) che chắn không.
- */
 public final class LineOfSight {
 
     private LineOfSight() {}
